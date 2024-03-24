@@ -61,15 +61,20 @@ def scrape_specialist_info(npi_num):
     #input_element.send_keys(Keys.ENTER)
     
     try:
-        driver.find_element("xpath",'//span[@_ngcontent-lft-c23][@tabindex="0"]')
-        driver.quit()
-        return -1 #this is an invalid NPI id
+        xpath_expression = "//*[contains(text(), 'Invalid NPI.')]"
+
+        # Find the element by XPath
+        element = driver.find_element(By.XPATH, xpath_expression)
+        #save_details = driver.find_element(By.XPATH,'//span[@_ngcontent-lft-c23][@tabindex="0"]')
+        #driver.quit()
+        #return -1 #this is an invalid NPI id
+        details = "Invalid npi"
     except NoSuchElementException:
         #if we find that specific npi, then return all his/her details to the scraping route
         #details:specialist name, address, contact details, and specialty
         
         details={"Name":"Rosh", "Address":"123 Church St", "Phone": "925-464-1982", "Specialty":"Podiatrist"}
-        
+    driver.quit()    
 
     return details
 
