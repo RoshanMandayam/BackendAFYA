@@ -4,6 +4,11 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+from bs4 import BeautifulSoup
+import requests
+
+
 
 app = Flask(__name__)
 app.secret_key = "abcde2o38cniuwc"
@@ -20,17 +25,52 @@ def read_csv_to_list(csv_file):
     return data
 
 
-def scrape_specialist_info():
+def scrape_specialist_info(npi_num):
+    #Beautifulsoup methhod trial:
+
+
+    # Fetch the HTML content of the webpage
+    url = "https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num)
+    response = requests.get(url)
+    html_content = response.text
+    # Parse the HTML content with Beautiful Soup
+    soup = BeautifulSoup(html_content, 'html.parser')
+    error_div = soup.find('div', class_='alert alert-danger')
+    #invalid_span = soup.find('span', {'_ngcontent-wmi-c23': True, 'tabindex': '0'})
+    #print(invalid_span)
+    if error_div:
+        error_message = error_div.get_text(strip=True)
+        return "INVALID ENTRY"
+    else:
+        print("Error message not found.")  
+        return 3  
+    
+    #Selenium method below:::
     chrome_options = Options()
      
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--disable-dev-shm-usage') #will write to diks instead of temp memory
-
+    chrome_options.add_argument('--disable-dev-shm-usage') #will write to disk instead of temp memory
     driver = webdriver.Chrome(options=chrome_options)
-    driver.get("https://npiregistry.cms.hhs.gov/search")
-    input_element = driver.find_element(By.ID,"npiNumber")
-    input_element.send_keys("Your text here")
+    #driver.get("https://npiregistry.cms.hhs.gov/search")
+    driver.get("https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num) )
+    #input_element = driver.find_element(By.ID,"npiNumber")
+    #input_element.send_keys(npi_num)
+    #input_element.send_keys(Keys.ENTER)
+    
+    try:
+        driver.find_element("xpath",'//form[@class="ng-dirty ng-invalid ng-submitted ng-touched"]')
+        driver.quit()
+        return -1 #this is an invalid NPI id
+    except NoSuchElementException:
+        #if we find that specific npi, then return all his/her details to the scraping route
+        #details:specialist name, address, contact details, and specialty
+        details={"Name":"Rosh"}
+        
+
+    return details
+
+    
 
 
 
@@ -66,12 +106,19 @@ def scrape():
 
     csv_file = 'NPI_LIST.csv'  # Replace 'data.csv' with the path to your CSV file
     data = read_csv_to_list(csv_file)
-    scrape_specialist_info()
+    
 
     #scraping time
     for npi_index, npi in enumerate(data):
-        continue
+        if  npi_index > 10:
+            continue
+        specialist_details = scrape_specialist_info(npi)
+        if specialist_details == -1:
+            continue
+        else:
+            NPI_INFO[npi] = specialist_details
 
+    return NPI_INFO
     return data
     return jsonify({'testing':'successful'})
 
