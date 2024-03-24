@@ -30,20 +30,22 @@ def scrape_specialist_info(npi_num):
 
 
     # Fetch the HTML content of the webpage
-    url = "https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num)
-    response = requests.get(url)
-    html_content = response.text
+    #url = "https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num)
+    #response = requests.get(url)
+    #html_content = response.text
+    #print(html_content)
     # Parse the HTML content with Beautiful Soup
-    soup = BeautifulSoup(html_content, 'html.parser')
-    error_div = soup.find('div', class_='alert alert-danger')
+    #soup = BeautifulSoup(html_content, 'html.parser')
+    #error_div = soup.find('div', class_='alert alert-danger')
+    #print(error_div)
     #invalid_span = soup.find('span', {'_ngcontent-wmi-c23': True, 'tabindex': '0'})
     #print(invalid_span)
-    if error_div:
-        error_message = error_div.get_text(strip=True)
-        return "INVALID ENTRY"
-    else:
-        print("Error message not found.")  
-        return 3  
+    # if error_div:
+    #     error_message = error_div.get_text(strip=True)
+    #     return "INVALID ENTRY"
+    # else:
+    #     #print("Error message not found.")  
+    #     return "replace with details"  
     
     #Selenium method below:::
     chrome_options = Options()
@@ -59,13 +61,14 @@ def scrape_specialist_info(npi_num):
     #input_element.send_keys(Keys.ENTER)
     
     try:
-        driver.find_element("xpath",'//form[@class="ng-dirty ng-invalid ng-submitted ng-touched"]')
+        driver.find_element("xpath",'//span[@_ngcontent-lft-c23][@tabindex="0"]')
         driver.quit()
         return -1 #this is an invalid NPI id
     except NoSuchElementException:
         #if we find that specific npi, then return all his/her details to the scraping route
         #details:specialist name, address, contact details, and specialty
-        details={"Name":"Rosh"}
+        
+        details={"Name":"Rosh", "Address":"123 Church St", "Phone": "925-464-1982", "Specialty":"Podiatrist"}
         
 
     return details
@@ -110,7 +113,7 @@ def scrape():
 
     #scraping time
     for npi_index, npi in enumerate(data):
-        if  npi_index > 10:
+        if  npi_index > 10 and int(npi) != 3000:
             continue
         specialist_details = scrape_specialist_info(npi)
         if specialist_details == -1:
