@@ -9,6 +9,28 @@ from bs4 import BeautifulSoup
 import requests
 import json
 import time
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+
+def get_geodesic_distance(address1, address2):
+    geolocator = Nominatim(user_agent="geopy_example")
+    
+    # Get location (latitude and longitude) for address1
+    location1 = geolocator.geocode(address1)
+    if not location1:
+        print(f"Location not found for address: {address1}")
+        return None
+    
+    # Get location (latitude and longitude) for address2
+    location2 = geolocator.geocode(address2)
+    if not location2:
+        print(f"Location not found for address: {address2}")
+        return None
+    
+    # Calculate distance between two locations using geodesic distance
+    distance = geodesic((location1.latitude, location1.longitude), (location2.latitude, location2.longitude)).kilometers
+    
+    return distance
 
 app = Flask(__name__)
 app.secret_key = "abcde2o38cniuwc"
@@ -25,27 +47,7 @@ def read_csv_to_list(csv_file):
     return data
 
 
-def scrape_specialist_info(npi_num):
-    #Beautifulsoup methhod trial:
-
-
-    # Fetch the HTML content of the webpage
-    #url = "https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num)
-    #response = requests.get(url)
-    #html_content = response.text
-    #print(html_content)
-    # Parse the HTML content with Beautiful Soup
-    #soup = BeautifulSoup(html_content, 'html.parser')
-    #error_div = soup.find('div', class_='alert alert-danger')
-    #print(error_div)
-    #invalid_span = soup.find('span', {'_ngcontent-wmi-c23': True, 'tabindex': '0'})
-    #print(invalid_span)
-    # if error_div:
-    #     error_message = error_div.get_text(strip=True)
-    #     return "INVALID ENTRY"
-    # else:
-    #     #print("Error message not found.")  
-    #     return "replace with details"  
+def scrape_specialist_info(npi_num): 
     
     #Selenium method below:::
     chrome_options = Options()
@@ -95,7 +97,7 @@ def scrape_specialist_info(npi_num):
             #name = driver.find_element(By.XPATH,"//*[contains(@class, 'blockquote')]")
             name = driver.find_element(By.XPATH,"/html/body/app-root/main/div/app-provider-view/div[3]/blockquote/p[1]")
             text_name = name.get_attribute("textContent").strip()
-            #print(text_content)
+            
         except NoSuchElementException:
             text_name = "Uknown Name?"
         
@@ -110,7 +112,7 @@ def scrape_specialist_info(npi_num):
             text_phone = text_to_parse[1].split("|")
             text_phone = text_phone[0].strip()
 
-
+            
             specialty = driver.find_element(By.XPATH,"/html/body/app-root/main/div/app-provider-view/div[3]/table/tbody/tr[11]/td[2]/table/tbody/tr/td[2]")
             text_specialty = specialty.get_attribute("textContent").strip()
             text_specialty = text_specialty.split("- ")
@@ -120,9 +122,6 @@ def scrape_specialist_info(npi_num):
         except NoSuchElementException:
             text_address = "Uknown Addy?"
 
-        #addres= 
-        #phone = 
-        #specialty = 
         details={"Name":text_name, "Address":text_address, "Phone": text_phone, "Specialty":text_specialty}
     driver.quit()    
 
@@ -134,7 +133,7 @@ NPI_INFO = {}
 
 @app.route("/", methods = ['GET'])
 def index():
-    return "Testing"
+    return "Website is up! Now go test the endpoint."
 
 @app.route("/scrape", methods = ['GET'])
 def scrape():
@@ -144,8 +143,8 @@ def scrape():
     
     #scraping time
     for npi_index, npi in enumerate(data):
-        if  npi_index > 10 and int(npi) != 3000:
-            continue
+        # if  npi_index > 10 and int(npi) != 3000:
+        #     continue
         specialist_details = scrape_specialist_info(npi)
         if specialist_details == -1:
             continue
@@ -161,7 +160,7 @@ def scrape():
     return NPI_INFO
 
 
-
+#"350 5th Ave, New York, NY"
 @app.route('/top_specialists', methods=['GET'])
 def get_top_specialists():
     reference_address = request.args.get('address')
@@ -169,13 +168,53 @@ def get_top_specialists():
         return jsonify({'Error': 'Reference address is required'}), 400
     
     # Extract the first three entries
-    first_three_specialists = dict(list(NPI_INFO.items())[:3])
+    #first_three_specialists = dict(list(NPI_INFO.items())[:3])
+    first = (-1,float('inf')) #first -1 is for npi number, second float('inf') is for distance to inputted address. These should be replaced during the algorithm
+    second= (-1,float('inf'))
+    third = (-1,float('inf'))
 
+    with open('data.json', 'r') as file:
+        data = json.load(file)
+        print(data)
+    for npi_number,provider_info in data.items():
+        address1 = provider_info["Address"]
+        address2 = reference_address
+        distance = get_geodesic_distance(address1, address2)
+        if distance is not None:
+            if distance <= first[1]:
+                third[0] = second[0]
+                third[1] = second[1]
+                second[0] = first[0]
+                second[1] = first[1]
+                first[0] = npi_number
+                first[1] = distance
+            elif (distance <= second[1]):
+                third[0] = second[0]
+                third[1] = second[1]
+                second[0] = npi_number
+                second[1] = distance
+            elif (distance  <= third[1]):
+                third[0] = npi_number
+                third[1] = distance
+        
+    # Example usage
+    #address1 = "1600 Amphitheatre Parkway, Mountain View, CA"
+    #address2 = "350 5th Ave, New York, NY"
+    #keyG = "AIzaSyDF5OmFRJoUh2qk7KmI79Rk0Zdkcl4dbgM"
+    # gmaps = Client(key=keyG)
+    # gmaps = googlemaps.Client(key=keyG)
+    # now = datetime.now()
+    # directions_result = gmaps.directions(orig,
+    #                                  dest,
+    #                                  mode="walking",
+    #                                  departure_time=now
+    #                                 )
+    # time = directions_result[0]['legs'][0]['duration']['value']
     # Convert the first three entries to JSON
-    json_data = json.dumps(first_three_specialists)
+    json_data = json.dumps(data[first[0]],data[second[0]], data[third[0]])
     response = {
         "status": "success",
-        "top_specialists": first_three_specialists
+        "top_specialists": json_data
     }
     # Implement ranking algorithm here (for now, just return first 3 specialists)
     return jsonify(response)
