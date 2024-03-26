@@ -20,9 +20,6 @@ RUN wget -q -O /tmp/chromedriver_linux64.zip https://storage.googleapis.com/chro
     && rm /tmp/chromedriver_linux64.zip
 
 
-ENV DISPLAY=:99
-RUN Xvfb :99 -screen 0 1024x768x24 &
-
 # Set the working directory in the container
 WORKDIR /app
 
@@ -33,15 +30,9 @@ COPY ./requirements.txt /app
 RUN pip install -r requirements.txt
 
 COPY . .
-#ENV FLASK_APP=my_flask.py
 
 EXPOSE 8080
 
 # Run app.py when the container launches
-CMD ["python", "app.py","--host", "0.0.0.0"]
-#CMD ["pytest"]
-#CMD ["Xvfb", ":99", "-screen", "0", "1024x768x24", "&", "your_chrome_command_here"]
-
-#4. Build the Docker Image using the terminal ( 'docker build -t backend .' ), after navigating to the current project folder
-#5. Run the container( 'docker run -p 8080:8080 -v /Users/roshanmandayam/BackendAFYA:/app backend' ), changing the file paths accordingly (my example is /Users/roshanmandayam/are-we-there-yet:/app) 
-#i.e. "docker run -p 8080:8080 -v /Users/roshanmandayam/are-we-there-yet:/app flaskapp"
+#CMD ["python", "app.py","--host", "0.0.0.0"]
+CMD ["pytest"]
