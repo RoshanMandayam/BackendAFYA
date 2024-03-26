@@ -133,11 +133,17 @@ def scrape_specialist_info(npi_num):
             extra_zip_code_portion = text_address.find('-')
             if extra_zip_code_portion != -1:
                 text_address = text_address[0:extra_zip_code_portion]
-            text_address = re.sub(r'SUITE \d+', '', text_address).strip() 
+            
+            text_address = re.sub(r'(SUITE|STE) [A-Z]\d*', '', text_address)
+            text_address = re.sub(r'(SUITE|STE) [A-Z]', '', text_address)
+            text_address = re.sub(r'(SUITE|STE) \d+', '', text_address).strip() 
             text_address = re.sub(r'FL \d+', '', text_address)
-            text_address = re.sub(r'STE \d+', '', text_address)
             text_address = re.sub(r'RM \d+', '', text_address)
             text_address = re.sub(r'OFARRELL', "O'FARRELL", text_address)
+            text_address = re.sub(r'SPC \d+', '', text_address)
+            text_address = re.sub(r'LN \d+', '', text_address) 
+            #More data cleaning and validation can be added, but were not added yet due to time constraint!
+            
             text_phone = text_to_parse[1].split("|")
             text_phone = text_phone[0].strip()
 
@@ -169,7 +175,7 @@ def scrape():
     #scraping time
     for npi_index, npi in enumerate(data):
         #time.sleep(1)
-        if  npi_index < 34 or npi_index > 40:
+        if  npi_index < 200:# or npi_index > 500: #60 to 100
             continue
         specialist_details = scrape_specialist_info(npi)
         if specialist_details == -1:
@@ -196,7 +202,7 @@ def get_top_specialists():
     # Extract the first three entries
     #first_three_specialists = dict(list(NPI_INFO.items())[:3])
     first = [-1,float('inf')] #first -1 is for npi number, second float('inf') is for distance to inputted address. These should be replaced during the algorithm
-    second= [-1,float('inf')]
+    second = [-1,float('inf')]
     third = [-1,float('inf')]
 
     with open('data.json', 'r') as file:
@@ -204,34 +210,25 @@ def get_top_specialists():
         #print(data)
     
     address2 = get_coord(reference_address)
-    for npi_number,provider_info in data.items():
+
+    all_distances = {}
+    for npi_number in data:
         address1 = data[(npi_number)]["Coordinates"]
-        #provider_info["Address"]
         if address1 is None:
             continue
-        distance = get_geo_distance(address1["latitude"], address2["longitude"], address2["latitude"],address2["longitude"])
-        
-        if distance is not None:
-            #print(distance)
-            if distance <= first[1]:
-                third[0] = second[0]
-                third[1] = second[1]
-                second[0] = first[0]
-                second[1] = first[1]
-                first[0] = npi_number
-                first[1] = distance
-            elif (distance <= second[1]):
-                third[0] = second[0]
-                third[1] = second[1]
-                second[0] = npi_number
-                second[1] = distance
-            elif (distance  <= third[1]):
-                third[0] = npi_number
-                third[1] = distance
-        
-    # Convert the first three entries to JSON
-    #json_data = json.dumps({data[first[0]],data[second[0]], data[third[0]]})
-    json_data = {"First":data[first[0]],"Second":data[second[0]], "Third":data[third[0]]}
+        distance = get_geo_distance(address1["latitude"], address1["longitude"], address2["latitude"],address2["longitude"])
+        all_distances[npi_number] = distance
+    #print(type(all_distances))
+    all_distances = sorted(all_distances.items(), key=lambda t: t[1])
+    #print(type(all_distances))
+    all_distances = all_distances[:3]
+    
+    #sorted_items = sorted(my_dict.items(), key=lambda x: x[1])
+    json_data = {"First":{all_distances[0][0]: data[all_distances[0][0]], "Distance": all_distances[0][1]},
+                "Second":{all_distances[1][0]: data[all_distances[1][0]], "Distance": all_distances[1][1]},
+                "Third":{all_distances[2][0]: data[all_distances[2][0]], "Distance": all_distances[2][1]}}
+
+    
     response = {
         "status": "success",
         "top_specialists": json_data
