@@ -19,7 +19,9 @@ app.secret_key = "abcde2o38cniuwc"
 app.app_context().push()
 
 NPI_INFO = {}
-
+with open('specialists.json', 'r') as file:
+    data = json.load(file)
+    
 def read_csv_to_list(csv_file):
     data = []
     with open(csv_file, mode='r') as file:
@@ -30,7 +32,6 @@ def read_csv_to_list(csv_file):
             data.append(int(row[0]))
     return data
 
-#I MANUALLY REMOVED  PH 1 FROM GOSHEN AVE, 1012 from 6200 wilshsire blvd, and suite 215 from  16405 sand canyone ave
 def get_coord(text_address):
     geolocator = Nominatim(user_agent="app",timeout = 10)
     #time.sleep(1)
@@ -183,7 +184,7 @@ def scrape():
         else:
             NPI_INFO[npi] = specialist_details
     # File path
-    file_path = "data.json"
+    file_path = "specialists.json"
 
     #Write data to JSON file
     with open(file_path, "w") as json_file:
@@ -191,50 +192,45 @@ def scrape():
     
     return NPI_INFO
 
+def _get_top_specialists(data: dict, reference_address: str, n: int) -> list[tuple[str, float]]:
+    reference_coords = get_coord(reference_address)
+    all_distances = {}
+    for npi_number in data:
+        specialist_address = data[(npi_number)]["Coordinates"]
+        if specialist_address is None:
+            continue
+        distance = get_geo_distance(specialist_address["latitude"], specialist_address["longitude"], reference_coords["latitude"],reference_coords["longitude"])
+        all_distances[npi_number] = distance
+    all_distances = sorted(all_distances.items(), key=lambda t: t[1])
+    return all_distances[:n]
 
-#"350 5th Ave, New York, NY"
 @app.route('/top_specialists', methods=['GET'])
 def get_top_specialists():
     reference_address = request.args.get('address')
     if not reference_address:
         return jsonify({'Error': 'Reference address is required'}), 400
     
-    # Extract the first three entries
-    #first_three_specialists = dict(list(NPI_INFO.items())[:3])
-    first = [-1,float('inf')] #first -1 is for npi number, second float('inf') is for distance to inputted address. These should be replaced during the algorithm
-    second = [-1,float('inf')]
-    third = [-1,float('inf')]
-
-    with open('data.json', 'r') as file:
-        data = json.load(file)
-        #print(data)
     
-    address2 = get_coord(reference_address)
 
-    all_distances = {}
-    for npi_number in data:
-        address1 = data[(npi_number)]["Coordinates"]
-        if address1 is None:
-            continue
-        distance = get_geo_distance(address1["latitude"], address1["longitude"], address2["latitude"],address2["longitude"])
-        all_distances[npi_number] = distance
-    #print(type(all_distances))
-    all_distances = sorted(all_distances.items(), key=lambda t: t[1])
-    #print(type(all_distances))
-    all_distances = all_distances[:3]
+    #calculating the closest 3 specialists
+    num_top_specialists = 3
+    top_n = _get_top_specialists(data, reference_address, num_top_specialists)
     
-    #sorted_items = sorted(my_dict.items(), key=lambda x: x[1])
-    json_data = {"First":{all_distances[0][0]: data[all_distances[0][0]], "Distance": all_distances[0][1]},
-                "Second":{all_distances[1][0]: data[all_distances[1][0]], "Distance": all_distances[1][1]},
-                "Third":{all_distances[2][0]: data[all_distances[2][0]], "Distance": all_distances[2][1]}}
+    # displaying the closest 3 specialists
+    json_data = {
+        str(i):{top_n[i][0]: data[top_n[i][0]], "Distance": top_n[i][1]}
+        for i in range(num_top_specialists)
+    }
 
-    
+    # in the format---   position: {NPI : {specialist details like address, name,etc} , Distance: float in kilometers}
     response = {
         "status": "success",
         "top_specialists": json_data
     }
-    # Implement ranking algorithm here (for now, just return first 3 specialists)
-    return jsonify(response)
 
+    return jsonify(response) 
+
+
+#Ensures the flask web server will only be started if run directly.
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
