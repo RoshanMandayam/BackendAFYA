@@ -51,7 +51,11 @@ def get_coord(text_address:str) -> dict:
 def get_geo_distance(loc1lat:float,loc1long:float,loc2lat:float,loc2long:float) -> float:
     if loc1lat is None:
         return None
-    if loc1long is None:
+    elif loc1long is None:
+        return None
+    elif loc2lat is None:
+        return None
+    elif loc2long is None:
         return None
     distance = geodesic((loc1lat, loc1long), (loc2lat,loc2long)).kilometers
     return distance
@@ -158,7 +162,7 @@ def scrape():
         else:
             NPI_INFO[npi] = specialist_details
     # File path
-    file_path = "fakespecialists.json"
+    file_path = "specialists.json"
 
     #Write data to JSON file
     with open(file_path, "w") as json_file:

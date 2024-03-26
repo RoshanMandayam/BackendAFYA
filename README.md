@@ -25,6 +25,8 @@ How to read the output of the top_specialists GET request:
         is another dictionary with the NPI and distance (a float). And inside of the NPI entry is more details regarding the
         specialist like name, address, etc.
 
+**The dockerfile has the line CMD ["pytest"] commented out. Uncomment and replace the other cmd line if  you'd like to run the test_app.py file. Since I am low on time, I did very basic unit testing, but with a full length project much more tests and edge cases would be added.
+
 
 
 
