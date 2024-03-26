@@ -20,6 +20,7 @@ How to use API:
 
 
 How to read the output of the top_specialists GET request:
+
     1. It is in JSON form. The first entry, "Closest Match" tells you the address that the API endpoint used to calculate the nearest specialists.
     Note that if your address was unclear, the closest match may be an address that you did not intend.
     2. The second entry, 'status', tells you that it was successful. If it wasn't you will get an error message.
