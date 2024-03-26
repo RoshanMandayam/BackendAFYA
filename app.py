@@ -13,7 +13,6 @@ from geopy.exc import GeocoderTimedOut
 import re
 
 
-
 app = Flask(__name__)
 app.secret_key = "abcde2o38cniuwc"
 app.app_context().push()
@@ -22,26 +21,26 @@ NPI_INFO = {}
 with open('specialists.json', 'r') as file:
     data = json.load(file)
 
+#use provided NPI reference list to save  a csv refereence
 def read_csv_to_list(csv_file):
-    data = []
+    npi_list = []
     with open(csv_file, mode='r') as file:
         reader = csv.reader(file)
         for index, row in enumerate(reader):
             if index % 2 == 1 or index==0 :  # Skip odd rows (indices are zero-based) and header row
                 continue
-            data.append(int(row[0]))
-    return data
+            npi_list.append(int(row[0]))
+    return npi_list
 
-def get_coord(text_address):
+#given the address as string, the function computes the latitude and longitude 
+#and the closest address match to the input (assuming the input string wasn't perfectly specific)
+def get_coord(text_address:str) -> dict:
     geolocator = Nominatim(user_agent="app",timeout = 10)
     try:
         coords = geolocator.geocode(text_address)
-        #print(type(coords))
-        #print(coords)
         if not coords:
             return None
-        # if len(coords) > 1:
-        #     return None
+        
     except GeocoderTimedOut:
         return None
     
@@ -57,6 +56,7 @@ def get_geo_distance(loc1lat:float,loc1long:float,loc2lat:float,loc2long:float) 
     distance = geodesic((loc1lat, loc1long), (loc2lat,loc2long)).kilometers
     return distance
 
+#helper function to do the actual scraping
 def scrape_specialist_info(npi_num:int): 
     
     #Selenium method below:::
@@ -141,15 +141,15 @@ def scrape_specialist_info(npi_num:int):
     return details
 
 
-
+#the function starts the scrape of the NPPES website and writes daata to JSON file
 @app.route("/scrape", methods = ['GET'])
 def scrape():
 
     csv_file = 'NPI_LIST.csv'  # Replace 'data.csv' with the path to your CSV file
-    data = read_csv_to_list(csv_file)
+    npi_list = read_csv_to_list(csv_file)
     
     #scraping time
-    for npi_index, npi in enumerate(data):
+    for npi_index, npi in enumerate(npi_list):
         if  npi_index > 10:# or npi_index > 500: #60 to 100
             continue
         specialist_details = scrape_specialist_info(npi)
@@ -166,6 +166,7 @@ def scrape():
     
     return NPI_INFO
 
+#helper function to sismilarly named get_top_specialists in order to calculate the top 3 clossest distances
 def _get_top_specialists(data: dict, reference_address: str, n: int) -> list[tuple[str, float]]:
     reference_coords = get_coord(reference_address)
     if reference_coords  is None:
@@ -173,12 +174,12 @@ def _get_top_specialists(data: dict, reference_address: str, n: int) -> list[tup
     all_distances = {}
     for npi_number in data:
         specialist_address = data[npi_number]["Coordinates"]
-        if specialist_address is None:
+        if specialist_address is None: #geopy could not find the coordinatess in this case.
             continue
         distance = get_geo_distance(specialist_address["latitude"], specialist_address["longitude"], reference_coords["latitude"],reference_coords["longitude"])
         all_distances[npi_number] = distance
     all_distances = sorted(all_distances.items(), key=lambda t: t[1])
-  
+    #sort it to find the top 3 quicker
     return all_distances[:n],reference_coords["closestMatch"]
 
 #This function will return a JSON file of the closest 3 specialists
