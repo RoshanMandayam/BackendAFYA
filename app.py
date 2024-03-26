@@ -5,13 +5,13 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-from bs4 import BeautifulSoup
-import requests
 import json
 import time
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
+from geopy.exc import GeocoderTimedOut
 import re
+
 
 
 app = Flask(__name__)
@@ -21,7 +21,7 @@ app.app_context().push()
 NPI_INFO = {}
 with open('specialists.json', 'r') as file:
     data = json.load(file)
-    
+
 def read_csv_to_list(csv_file):
     data = []
     with open(csv_file, mode='r') as file:
@@ -34,32 +34,18 @@ def read_csv_to_list(csv_file):
 
 def get_coord(text_address):
     geolocator = Nominatim(user_agent="app",timeout = 10)
-    #time.sleep(1)
-    coords = geolocator.geocode(text_address)
-    if not coords:
-        print(f"Coords/location not found")
+    try:
+        coords = geolocator.geocode(text_address, limit = 3)
+        if not coords:
+            return None
+        if len(coords) > 1:
+            return None
+    except GeocoderTimedOut:
         return None
+    
+    
 
     return {"latitude":coords.latitude,"longitude":coords.longitude}
-def get_geodesic_distance(address1, address2):
-    geolocator = Nominatim(user_agent="my_app")
-    
-    # Get location (latitude and longitude) for address1
-    location1 = geolocator.geocode(address1)
-    if not location1:
-        print(f"Location not found for address: {address1}")
-        return None
-    
-    # Get location (latitude and longitude) for address2
-    location2 = geolocator.geocode(address2)
-    if not location2:
-        print(f"Location not found for address: {address2}")
-        return None
-    
-    # Calculate distance between two locations using geodesic distance
-    distance = geodesic((location1.latitude, location1.longitude), (location2.latitude, location2.longitude)).kilometers
-    
-    return distance
 
 def get_geo_distance(loc1lat,loc1long,loc2lat,loc2long):
     if loc1lat is None:
@@ -86,9 +72,7 @@ def scrape_specialist_info(npi_num):
     driver = webdriver.Chrome(options=chrome_options)
     #driver.get("https://npiregistry.cms.hhs.gov/search")
     driver.get("https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num) )
-    #input_element = driver.find_element(By.ID,"npiNumber")
-    #input_element.send_keys(npi_num)
-    #input_element.send_keys(Keys.ENTER)
+    
     
     try:
         time.sleep(1)
@@ -163,9 +147,6 @@ def scrape_specialist_info(npi_num):
     return details
 
 
-@app.route("/", methods = ['GET'])
-def index():
-    return "Website is up! Now go test the endpoint."
 
 @app.route("/scrape", methods = ['GET'])
 def scrape():
@@ -194,6 +175,8 @@ def scrape():
 
 def _get_top_specialists(data: dict, reference_address: str, n: int) -> list[tuple[str, float]]:
     reference_coords = get_coord(reference_address)
+    if reference_coords  is None:
+        return -1 #indicating this was a bad address input
     all_distances = {}
     for npi_number in data:
         specialist_address = data[(npi_number)]["Coordinates"]
@@ -204,9 +187,11 @@ def _get_top_specialists(data: dict, reference_address: str, n: int) -> list[tup
     all_distances = sorted(all_distances.items(), key=lambda t: t[1])
     return all_distances[:n]
 
+#This function will return a JSON file of the closest 3 specialists
 @app.route('/top_specialists', methods=['GET'])
 def get_top_specialists():
-    reference_address = request.args.get('address')
+    
+    reference_address = request.args.get('address') #this is the address passed in by user
     if not reference_address:
         return jsonify({'Error': 'Reference address is required'}), 400
     
@@ -215,7 +200,8 @@ def get_top_specialists():
     #calculating the closest 3 specialists
     num_top_specialists = 3
     top_n = _get_top_specialists(data, reference_address, num_top_specialists)
-    
+    if top_n == -1 :
+        return "You inputted an invalid address or the Geocoding service timed out. Please try again."
     # displaying the closest 3 specialists
     json_data = {
         str(i):{top_n[i][0]: data[top_n[i][0]], "Distance": top_n[i][1]}
@@ -230,6 +216,17 @@ def get_top_specialists():
 
     return jsonify(response) 
 
+
+
+
+
+
+
+
+#This has nothing on it, except a welcome message to confirm it works
+@app.route("/", methods = ['GET'])
+def index():
+    return "Website is working! Now go test the endpoint."
 
 #Ensures the flask web server will only be started if run directly.
 if __name__ == '__main__':

@@ -4,7 +4,6 @@ regular expressions to clean the address information so that it could be sent fo
 
 How to use API:
 1. Clone the github repo
-2. Replace the api keys for the Google Map API Key (line 74 of app.py, session['key'] = "YOUR_API_KEY")
 3. Download Docker (download the desktop app: https://www.docker.com/products/docker-desktop/)
 4. Build the Docker Image using the terminal ( 'docker build -t nameOfYourImage .' ), after navigating to the current project folder
 5. Run the container( 'docker run -p 8080:8080 -v /host/directory:/container/directory nameOfYourImage' ), changing the file paths accordingly (my example is /Users/roshanmandayam/BackendAFYA:/app)
