@@ -11,7 +11,9 @@ How to use API:
     a. By pasting 'http://127.0.0.1:8080/scrape' , you can call the function that scrapes the NPPES website and stores NPI numbers with 
         specialist details like Name, Address, Phone, and Specialty. BUT since the scraping function takes upwards of 15 minutes
         to go through all the reference NPI's, I have pre-fetched the data once and stored it (in 'specialists.json' ).
-    b. You can find the closest 3 specialists to an address that you input by pasting
+
+
+   b. You can find the closest 3 specialists to an address that you input by pasting
         http://127.0.0.1:8080/top_specialists?address="YOUR_ADDRESS" replacing YOUR_ADDRESS with one you'd like to test.
         Make sure to follow the format "1600 Amphitheatre Parkway, Mountain View, CA 94043"
         i.e. "number street, city, state zip"
