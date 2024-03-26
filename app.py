@@ -5,12 +5,11 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-from bs4 import BeautifulSoup
-import requests
 import json
 import time
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
+from geopy.exc import GeocoderTimedOut
 import re
 
 
@@ -19,75 +18,58 @@ app.secret_key = "abcde2o38cniuwc"
 app.app_context().push()
 
 NPI_INFO = {}
+with open('specialists.json', 'r') as file:
+    data = json.load(file)
 
+#use provided NPI reference list to save  a csv refereence
 def read_csv_to_list(csv_file):
-    data = []
+    npi_list = []
     with open(csv_file, mode='r') as file:
         reader = csv.reader(file)
         for index, row in enumerate(reader):
             if index % 2 == 1 or index==0 :  # Skip odd rows (indices are zero-based) and header row
                 continue
-            data.append(int(row[0]))
-    return data
+            npi_list.append(int(row[0]))
+    return npi_list
 
-#I MANUALLY REMOVED  PH 1 FROM GOSHEN AVE, 1012 from 6200 wilshsire blvd, and suite 215 from  16405 sand canyone ave
-def get_coord(text_address):
+#given the address as string, the function computes the latitude and longitude 
+#and the closest address match to the input (assuming the input string wasn't perfectly specific)
+def get_coord(text_address:str) -> dict:
     geolocator = Nominatim(user_agent="app",timeout = 10)
-    #time.sleep(1)
-    coords = geolocator.geocode(text_address)
-    if not coords:
-        print(f"Coords/location not found")
+    try:
+        coords = geolocator.geocode(text_address)
+        if not coords:
+            return None
+        
+    except GeocoderTimedOut:
         return None
+    
+    
 
-    return {"latitude":coords.latitude,"longitude":coords.longitude}
-def get_geodesic_distance(address1, address2):
-    geolocator = Nominatim(user_agent="my_app")
-    
-    # Get location (latitude and longitude) for address1
-    location1 = geolocator.geocode(address1)
-    if not location1:
-        print(f"Location not found for address: {address1}")
-        return None
-    
-    # Get location (latitude and longitude) for address2
-    location2 = geolocator.geocode(address2)
-    if not location2:
-        print(f"Location not found for address: {address2}")
-        return None
-    
-    # Calculate distance between two locations using geodesic distance
-    distance = geodesic((location1.latitude, location1.longitude), (location2.latitude, location2.longitude)).kilometers
-    
-    return distance
+    return {"latitude":coords.latitude,"longitude":coords.longitude, "closestMatch": coords.address}
 
-def get_geo_distance(loc1lat,loc1long,loc2lat,loc2long):
+def get_geo_distance(loc1lat:float,loc1long:float,loc2lat:float,loc2long:float) -> float:
     if loc1lat is None:
         return None
-    if loc1long is None:
+    elif loc1long is None:
         return None
-    # geolocator = Nominatim(user_agent="my_app")
-    # loc1 = geolocator.geocode(address1)
-    # if not loc1:
-    #     print(f"Location not found for address: {address1}")
-    #     return None
-    
+    elif loc2lat is None:
+        return None
+    elif loc2long is None:
+        return None
     distance = geodesic((loc1lat, loc1long), (loc2lat,loc2long)).kilometers
     return distance
 
-def scrape_specialist_info(npi_num): 
+#helper function to do the actual scraping
+def scrape_specialist_info(npi_num:int): 
     
     #Selenium method below:::
     chrome_options = Options()
-     
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--headless')
     chrome_options.add_argument('--disable-dev-shm-usage') #will write to disk instead of temp memory
     driver = webdriver.Chrome(options=chrome_options)
-    #driver.get("https://npiregistry.cms.hhs.gov/search")
     driver.get("https://npiregistry.cms.hhs.gov/provider-view/"+str(npi_num) )
-    #input_element = driver.find_element(By.ID,"npiNumber")
-    #input_element.send_keys(npi_num)
-    #input_element.send_keys(Keys.ENTER)
     
     try:
         time.sleep(1)
@@ -99,41 +81,42 @@ def scrape_specialist_info(npi_num):
             details = "Invalid NPI"
             driver.quit()
             return -1
-        except:        
+        except:  #There is an error message, but it is not an invalid npi error      
             try:
                 xpath_expression = "//*[contains(text(), 'No matching records found.')]"
                 element = driver.find_element(By.XPATH,xpath_expression)
                 details = "No matching records found."
                 driver.quit()
                 return -1
-            except NoSuchElementException:
+            except NoSuchElementException:#  The error message is neighter invalid npi or matching records
                 details = "UNKNOWN ERROR"
                 return -1
     
-    except NoSuchElementException:
+    except NoSuchElementException: #There is no error message
         
         #if we find that specific npi, then return all his/her details to the scraping route
-        #details:specialist name, address, contact details, and specialty
+        #details:specialist name, address, contact, and specialty
         time.sleep(1)
         try:
             name = driver.find_element(By.XPATH,"/html/body/app-root/main/div/app-provider-view/div[3]/blockquote/p[1]")
             text_name = name.get_attribute("textContent").strip()
             
-        except NoSuchElementException:
+        except NoSuchElementException:#Name field is formatted unusually if this exception is reached
             text_name = "Uknown Name"
         
         try:
             person_info = driver.find_element(By.XPATH,"/html/body/app-root/main/div/app-provider-view/div[3]/table/tbody/tr[7]/td[2]/span")# | /html/body/app-root/main/div/app-provider-view/div[3]/table/tbody/tr[7]/td[2]/span/text()[2] | /html/body/app-root/main/div/app-provider-view/div[3]/table/tbody/tr[7]/td[2]/span/text()[3]")
             text_to_parse = person_info.text
             text_to_parse = text_to_parse.split("Phone: ")
-            replace = text_to_parse[0].find('\n')
+            replace = text_to_parse[0].find('\n') #this newline separates street aand city usually
             if replace != -1:
-                text_to_parse[0] = text_to_parse[0][0:replace] + ', ' + text_to_parse[0][replace+1:]
+                text_to_parse[0] = text_to_parse[0][0:replace] + ', ' + text_to_parse[0][replace+1:] #this adds comma between street and city.
             text_address = text_to_parse[0].replace("\n", " ").strip()
             extra_zip_code_portion = text_address.find('-')
             if extra_zip_code_portion != -1:
-                text_address = text_address[0:extra_zip_code_portion]
-            
+                text_address = text_address[0:extra_zip_code_portion] #remove everything after the 5 digit zip code.
+
+            #Data cleansing rules are being added to make data more readable and structured.
             text_address = re.sub(r'(SUITE|STE) [A-Z]\d*', '', text_address)
             text_address = re.sub(r'(SUITE|STE) [A-Z]', '', text_address)
             text_address = re.sub(r'(SUITE|STE) \d+', '', text_address).strip() 
@@ -151,31 +134,27 @@ def scrape_specialist_info(npi_num):
             specialty = driver.find_element(By.XPATH,"/html/body/app-root/main/div/app-provider-view/div[3]/table/tbody/tr[11]/td[2]/table/tbody/tr/td[2]")
             text_specialty = specialty.get_attribute("textContent").strip()
             text_specialty = text_specialty.split("- ")
-            text_specialty = text_specialty[1].strip()
+            text_specialty = text_specialty[1].strip() #this gives us the final version of the specialty 
             
         except NoSuchElementException:
             text_address = "Uknown Address"
-        coord_address = get_coord(text_address)
+        coord_address = get_coord(text_address) #latitude and longitude of the address on the page, pre-saved to save time.
         details={"Name":text_name, "Address":text_address, "Phone": text_phone, "Specialty":text_specialty, "Coordinates":coord_address}
     driver.quit()    
 
     return details
 
 
-@app.route("/", methods = ['GET'])
-def index():
-    return "Website is up! Now go test the endpoint."
-
+#the function starts the scrape of the NPPES website and writes daata to JSON file
 @app.route("/scrape", methods = ['GET'])
 def scrape():
 
     csv_file = 'NPI_LIST.csv'  # Replace 'data.csv' with the path to your CSV file
-    data = read_csv_to_list(csv_file)
+    npi_list = read_csv_to_list(csv_file)
     
     #scraping time
-    for npi_index, npi in enumerate(data):
-        #time.sleep(1)
-        if  npi_index < 200:# or npi_index > 500: #60 to 100
+    for npi_index, npi in enumerate(npi_list):
+        if  npi_index > 10:# or npi_index > 500: #60 to 100
             continue
         specialist_details = scrape_specialist_info(npi)
         if specialist_details == -1:
@@ -183,7 +162,7 @@ def scrape():
         else:
             NPI_INFO[npi] = specialist_details
     # File path
-    file_path = "data.json"
+    file_path = "specialists.json"
 
     #Write data to JSON file
     with open(file_path, "w") as json_file:
@@ -191,50 +170,57 @@ def scrape():
     
     return NPI_INFO
 
+#helper function to sismilarly named get_top_specialists in order to calculate the top 3 clossest distances
+def _get_top_specialists(data: dict, reference_address: str, n: int) -> list[tuple[str, float]]:
+    reference_coords = get_coord(reference_address)
+    if reference_coords  is None:
+        return None #indicating this was a bad address input
+    all_distances = {}
+    for npi_number in data:
+        specialist_address = data[npi_number]["Coordinates"]
+        if specialist_address is None: #geopy could not find the coordinatess in this case.
+            continue
+        distance = get_geo_distance(specialist_address["latitude"], specialist_address["longitude"], reference_coords["latitude"],reference_coords["longitude"])
+        all_distances[npi_number] = distance
+    all_distances = sorted(all_distances.items(), key=lambda t: t[1])
+    #sort it to find the top 3 quicker
+    return all_distances[:n],reference_coords["closestMatch"]
 
-#"350 5th Ave, New York, NY"
+#This function will return a JSON file of the closest 3 specialists
 @app.route('/top_specialists', methods=['GET'])
 def get_top_specialists():
-    reference_address = request.args.get('address')
+    
+    reference_address = request.args.get('address') #this is the address passed in by user
     if not reference_address:
         return jsonify({'Error': 'Reference address is required'}), 400
     
-    # Extract the first three entries
-    #first_three_specialists = dict(list(NPI_INFO.items())[:3])
-    first = [-1,float('inf')] #first -1 is for npi number, second float('inf') is for distance to inputted address. These should be replaced during the algorithm
-    second = [-1,float('inf')]
-    third = [-1,float('inf')]
+    #calculating the closest 3 specialists
+    num_top_specialists = 3
+    top_n = _get_top_specialists(data, reference_address, num_top_specialists)
+    if top_n is None :
+        return "Either you inputted an invalid address or the Geocoding service timed out. Please try again."
+    # displaying the closest 3 specialists
+    json_data = {
+        str(i):{top_n[0][i][0]: data[top_n[0][i][0]], "Distance": top_n[0][i][1]}
+        for i in range(num_top_specialists)
+    }
 
-    with open('data.json', 'r') as file:
-        data = json.load(file)
-        #print(data)
-    
-    address2 = get_coord(reference_address)
-
-    all_distances = {}
-    for npi_number in data:
-        address1 = data[(npi_number)]["Coordinates"]
-        if address1 is None:
-            continue
-        distance = get_geo_distance(address1["latitude"], address1["longitude"], address2["latitude"],address2["longitude"])
-        all_distances[npi_number] = distance
-    #print(type(all_distances))
-    all_distances = sorted(all_distances.items(), key=lambda t: t[1])
-    #print(type(all_distances))
-    all_distances = all_distances[:3]
-    
-    #sorted_items = sorted(my_dict.items(), key=lambda x: x[1])
-    json_data = {"First":{all_distances[0][0]: data[all_distances[0][0]], "Distance": all_distances[0][1]},
-                "Second":{all_distances[1][0]: data[all_distances[1][0]], "Distance": all_distances[1][1]},
-                "Third":{all_distances[2][0]: data[all_distances[2][0]], "Distance": all_distances[2][1]}}
-
-    
+    # in the format---   position: {NPI : {specialist details like address, name,etc} , Distance: float in kilometers}
     response = {
+        "Closest Match": "This is the address used: " + str(top_n[1]) + ". If it is incorrect, please provide a more exact address.",
         "status": "success",
         "top_specialists": json_data
     }
-    # Implement ranking algorithm here (for now, just return first 3 specialists)
-    return jsonify(response)
 
+    return jsonify(response) 
+
+
+#This has nothing on it, except a welcome message to confirm it works
+@app.route("/", methods = ['GET'])
+def index():
+    return "Website is working! Now go test the endpoint."
+
+
+#Ensures the flask web server will only be started if run directly.
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
