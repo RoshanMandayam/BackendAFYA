@@ -1,3 +1,8 @@
+This project was created as part of a hackathon. I designed an API endpoint that scrapes medical provider data 
+from the NPPES website so that users  can call the API with a specific address and it responds with the three closest
+medical providers(given certain constraints)
+
+
 Note: Data validation was started but could  not be finished due to time constraints! With more time, I would use additional
 regular expressions to clean the address information so that it could be sent for geopy to search without error.
 
